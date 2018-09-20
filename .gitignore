@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.idea/
+*.gz
+*.vcf
+*.sam
+*.bam
+*.bai
+*.counts2hist
+*.txt
