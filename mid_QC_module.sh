@@ -104,7 +104,7 @@ cat ${f%.bqsr}.totalvars.tmp ${f%.bqsr}.af*tmp > ${f%.bqsr}_varbins
 done
 
 #### merge from all samples for final report/Table
-printf "Sample\nTotal_Vars\nVars_AF <0.1%%\nVars_AF 0.1-0.5%%\nVars_AF 0.5-1%%\nVars_AF 1-5%%\nVars_AF 5-10%%\nVars_AF 10-50%%\nVars_AF >= 50%%\n" > bin_header
+printf "Sample\nTotal_Vars\n<0.1%%\n0.1-0.5%%\n0.5-1%%\n1-5%%\n5-10%%\n10-50%%\n>= 50%%\n" > bin_header
 
 paste bin_header *_varbins > variant_AFbins_prePOST-MID.txt
 
