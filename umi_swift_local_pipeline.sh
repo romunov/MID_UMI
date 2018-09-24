@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 
 # start with a fresh session of dockers
-# NOOKILLAR option for cleaning docker containers:
-# docker rm $(docker ps -aq)
+# NOOKILLAR option for cleaning docker containers: docker rm $(docker ps -aq)
 
-docker stop trimmomatic bwa picard snpeff gatk4 lofreq
-docker rm trimmomatic bwa picard snpeff gatk4 lofreq
+docker stop trimmomatic bwa picard snpeff gatk3.6 lofreq coveragebed
+docker rm trimmomatic bwa picard snpeff gatk3.6 lofreq coveragebed
 
 # set initial parameters
 ncores=6
 
-# TODO: vprašati Sikunder katere indel fajle se uporablja (in zakaj)
+# TODO: vprašaj katere indel fajle se uporablja (in zakaj)
 
 #### TOOLS ####
 # TRIMMOMATIC
@@ -55,10 +54,10 @@ docker run -dt --name snpeff \
     resolwebio/legacy:1.0.0 \
     bash --login
 
-# FGBIO
+# FGBIO (from GitHub)
 fgbio=/home/romunov/biotools/fgbio/target/scala-2.12/fgbio-0.7.0-f2d5d5e-SNAPSHOT.jar
 
-# PRIMERCLIP
+# PRIMERCLIP (latest version from GitHub)
 primerclip=/home/romunov/.local/bin/primerclip
 
 # GATK
@@ -69,8 +68,9 @@ docker run -dt --name gatk3.6 \
     bash --login
 # usage: java -jar GATK36.jar -T RealignerTargetCreator --help
 
-# PYTHON SCRIPT LOFREQ
+# PYTHON SCRIPT LOFREQ (from resolwe-bio package)
 filterlf=/home/romunov/Documents/genialis/resolwe-bio/resolwe_bio/tools/lofreq2_indel_ovlp.py
+
 #### TOOLS ####
 
 #### DATABASES ####
@@ -88,7 +88,12 @@ MASTER="/home/romunov/biotools/db/masterfiles/18-2132_EGFR_MID_Masterfile.txt"
 
 # master file has been uploaded to Genialis platform for processing and bed files downloaded
 BED="/db/masterfiles/18-2132_EGFR_MID_Masterfile_merged_targets_5col.bed"
+BEDL="/home/romunov/biotools/db/masterfiles/18-2132_EGFR_MID_Masterfile_merged_targets_5col.bed" # bed local
 NOOLAPBED="/db/masterfiles/18-2132_EGFR_MID_Masterfile_nonmerged_noolaps_targets_5col.bed"
+
+known_dbsnp="/db/known_sites/dbsnp_138.b37.vcf"
+known_1000g="/db/known_sites/1000G_phase1.snps.high_confidence.b37.vcf"
+known_hapmap="/db/known_sites/hapmap_3.3.b37.vcf"
 #### DATABASES ####
 
 set -e # exit if simple command exits with non-zero status unless in a loop
@@ -96,17 +101,20 @@ set -x # print trace of sample commands and their arguments
 
 for f in *_R1_001.fastq.gz
 do
-    fq1=${f}
-    fq2=${f%_R1*}_R2_001.fastq.gz # strips string of _R1*
-    OUT=${fq1%%_L001*} # strips string of _L001*
+
+fq1=${f}
+fq2=${f%_R1*}_R2_001.fastq.gz # strips string of _R1*
+OUT=${fq1%%_L001*} # strips string of _L001*
+
+echo $(printf "##### PROCESSING SAMPLE %s" ${OUT})
 #echo $OUT
 #done
 #exit
 
 ### TEMP ###
-fq1="EGFR-27cfDNA_S53_L001_R1_001.fastq.gz"
-fq2="EGFR-27cfDNA_S53_L001_R2_001.fastq.gz"
-OUT="EGFR-27cfDNA_S53"
+#fq1="EGFR-27cfDNA_S53_L001_R1_001.fastq.gz"
+#fq2="EGFR-27cfDNA_S53_L001_R2_001.fastq.gz"
+#OUT="EGFR-27cfDNA_S53"
 ### TEMP ###
 
 ########## PRE-MID analysis & POST-MID with fgbio ##############
@@ -127,7 +135,7 @@ run_bwa1=$(printf "bwa mem %s %s %s.trimd.R2.fq.gz -M -t %s -v 1 > %s.sam" ${REF
 time docker exec -w /reads -t bwa bash --login -c "$run_bwa1"
 
 # Sort, Add RG for nopclip bam
-run_picard_oddreplace_readgrp=$(printf \
+run_picard_addreplace_readgrp=$(printf \
 "picard-tools AddOrReplaceReadGroups \
     I=%s.sam \
     O=%s.preMID.bam \
@@ -141,7 +149,7 @@ run_picard_oddreplace_readgrp=$(printf \
     CREATE_INDEX=TRUE" \
 ${OUT} ${OUT} ${OUT})
 
-time docker exec -w /reads -t picard bash --login $run_picard_oddreplace_readgrp
+time docker exec -w /reads -t picard bash --login $run_picard_addreplace_readgrp
 
 # query sort for primerclip
 run_sortsam1=$(printf \
@@ -163,7 +171,7 @@ time docker exec -w /reads -t picard bash --login $run_sortsam1
 # RGPU=Miseq CREATE_INDEX=TRUE
 
 ## variant call preMID primer trimmed bam
-run_lf1=$(printf
+run_lf1=$(printf \
 "lofreq call-parallel \
     --pp-threads %s \
     --call-indels \
@@ -186,13 +194,14 @@ time docker exec -w /reads -t lofreq bash --login -c "$run_lf1"
 time java -Xmx8g -jar $fgbio AnnotateBamWithUmis -i $OUT.preMID.bam -f $mid -o $OUT.bamAnnotdWumi.bam
 
 #bedtools to get per amplicon coverage
-time coverageBed -abam $OUT.bamAnnotdWumi.bam -b $BED > $OUT.bamAnnotdWumi.cov
-time coverageBed -abam $OUT.preMID.bam -b $BED -d > $OUT.preMID.covd
-time coverageBed -abam $OUT.preMID.bam -b $BED > $OUT.preMID.cov
+# NOTE: use of parameters in coverageBed has changed with v2.24. Use -abam for the bed file and -b for .bam file.
+#time coverageBed -abam $OUT.bamAnnotdWumi.bam -b ${BEDL} > $OUT.bamAnnotdWumi.cov
+#time coverageBed -abam $OUT.preMID.bam -b ${BEDL} -d > $OUT.preMID.covd
+#time coverageBed -abam $OUT.preMID.bam -b ${BEDL} > $OUT.preMID.cov
 
-run_cb1=$(printf "coverageBed -abam %s.bamAnnotdWumi.bam -b %s > %s.bamAnnotdWumi.cov" ${OUT} ${BED} ${OUT})
-run_cb2=$(printf "coverageBed -abam %s.preMID.bam -b %s -d > %s.preMID.covd" ${OUT} ${BED} ${OUT})
-run_cb3=$(printf "coverageBed -abam %s.preMID.bam -b %s > %s.preMID.cov" ${OUT} ${BED} ${OUT})
+run_cb1=$(printf "coverageBed -b %s.bamAnnotdWumi.bam -abam %s > %s.bamAnnotdWumi.cov" ${OUT} ${BED} ${OUT})
+run_cb2=$(printf "coverageBed -b %s.preMID.bam -abam %s -d > %s.preMID.covd" ${OUT} ${BED} ${OUT})
+run_cb3=$(printf "coverageBed -b %s.preMID.bam -abam %s > %s.preMID.cov" ${OUT} ${BED} ${OUT})
 
 time docker exec -w /reads -t coveragebed bash --login -c "$run_cb1"
 time docker exec -w /reads -t coveragebed bash --login -c "$run_cb2"
@@ -209,7 +218,7 @@ run_revertsam=$(printf \
     REMOVE_DUPLICATE_INFORMATION=false \
     REMOVE_ALIGNMENT_INFORMATION=false" \
     ${OUT} ${OUT})
-docker exec -w /reads -t coveragebed bash --login -c "$run_revertsam"
+time docker exec -w /reads -t coveragebed bash --login -c "$run_revertsam"
 
 #SetMateInfo to bring MQ tags
 time java -jar $fgbio SetMateInformation -i $OUT.sanitised.bam -o $OUT.sanitised.setmateinfo.bam
@@ -358,19 +367,19 @@ time docker exec -w /reads -t picard bash --login -c "$run_coltarmet2"
 #BEDtools
 #coverageBed -abam $OUT.fgbio.bam -b $BED > $OUT.fgbio.cov
 #coverageBed -abam $OUT.fgbio.bam -b $BED -d > $OUT.fgbio.covd
-run_cb4=$(printf "coverageBed -abam %s.fgbio.bam -b %s > %s.fgbio.cov" ${OUT} ${BED} ${OUT})
-run_cb5=$(printf "coverageBed -abam %s.fgbio.bam -b %s -d > %s.fgbio.covd" ${OUT} ${BED} ${OUT})
+run_cb4=$(printf "coverageBed -b %s.fgbio.bam -abam %s > %s.fgbio.cov" ${OUT} ${BED} ${OUT})
+run_cb5=$(printf "coverageBed -b %s.fgbio.bam -abam %s -d > %s.fgbio.covd" ${OUT} ${BED} ${OUT})
 
 #coverageBed -abam $OUT.fgbio.bam -b $NOOLAPBED > $OUT.noolap.fgbio.cov
 #coverageBed -abam $OUT.fgbio.bam -b $NOOLAPBED -d > $OUT.noolap.fgbio.covd
-run_cb6=$(printf "coverageBed -abam %s.fgbio.bam -b %s > %s.noolap.fgbio.cov" ${OUT} ${NOOLAPBED} ${OUT})
-run_cb7=$(printf "coverageBed -abam %s.fgbio.bam -b %s -d > %s.noolap.fgbio.covd" ${OUT} ${NOOLAPBED} ${OUT})
+run_cb6=$(printf "coverageBed -b %s.fgbio.bam -abam %s > %s.noolap.fgbio.cov" ${OUT} ${NOOLAPBED} ${OUT})
+run_cb7=$(printf "coverageBed -b %s.fgbio.bam -abam %s -d > %s.noolap.fgbio.covd" ${OUT} ${NOOLAPBED} ${OUT})
 
 # pre MID cov covd files with noolap BED
 #coverageBed -abam $OUT.preMID.bam -b $NOOLAPBED > $OUT.noolap.preMID.cov
 #coverageBed -abam $OUT.preMID.bam -b $NOOLAPBED -d > $OUT.noolap.preMID.covd
-run_cb8=$(printf "coverageBed -abam %s.preMID.bam -b %s > %s.noolap.preMID.cov" ${OUT} ${NOOLAPBED} ${OUT})
-run_cb9=$(printf "coverageBed -abam %s.preMID.bam -b %s -d > %s.noolap.preMID.covd" ${OUT} ${NOOLAPBED} ${OUT})
+run_cb8=$(printf "coverageBed -b %s.preMID.bam -abam %s > %s.noolap.preMID.cov" ${OUT} ${NOOLAPBED} ${OUT})
+run_cb9=$(printf "coverageBed -b %s.preMID.bam -abam %s -d > %s.noolap.preMID.covd" ${OUT} ${NOOLAPBED} ${OUT})
 
 time docker exec -w /reads -t coveragebed bash --login -c "$run_cb4"
 time docker exec -w /reads -t coveragebed bash --login -c "$run_cb5"
@@ -444,14 +453,17 @@ run_gatk3=$(printf \
     -R %s\
     -I %s.fgbio.bam \
     -nct %s \
-    --knownSites /db/dbNSFP/dbsnp_138.b37.vcf \
-    --knownSites /db/known_sites/1000G_phase1.snps.high_confidence.b37.vcf \
-    --knownSites /db/known_sites/hapmap_3.3.b37.vcf \
+    --knownSites %s \
+    --knownSites %s \
+    --knownSites %s \
     -L %s \
     -o %s.recal_data.table" \
     ${REF} \
     ${OUT} \
     ${ncores} \
+    ${known_dbsnp} \
+    ${known_1000g} \
+    ${known_hapmap} \
     ${BED} \
     ${OUT})
 
@@ -524,7 +536,7 @@ run_gatk6=$(printf \
     ${BED} \
     ${OUT})
 
-docker exec -w /reads -t gatk3.6 bash --login -c "$run_gatk6"
+time docker exec -w /reads -t gatk3.6 bash --login -c "$run_gatk6"
 
 #$GATK  -T BaseRecalibrator -R $REF -I $OUT.preMID.bam \
 #    --knownSites $anno/data/GRCh37.75/dbsnp141.vcf -nct 12 \
@@ -538,17 +550,20 @@ time run_gatk7=$(printf \
     -T BaseRecalibrator \
     -R %s \
     -I %s.preMID.bam \
-    --knownSites /db/dbNSFP/dbsnp_138.b37.vcf \
-    --knownSites /db/known_sites/1000G_phase1.snps.high_confidence.b37.vcf \
-    --knownSites /db/known_sites/hapmap_3.3.b37.vcf \
+    --knownSites %s \
+    --knownSites %s \
+    --knownSites %s \
     -L %s \
     -o %s.recal_data.table" \
     ${REF} \
     ${OUT} \
+    ${known_dbsnp} \
+    ${known_1000g} \
+    ${known_hapmap} \
     ${BED} \
     ${OUT})
 
-docker exec -w /reads -t gatk3.6 bash --login -c "$run_gatk7"
+time docker exec -w /reads -t gatk3.6 bash --login -c "$run_gatk7"
 
 #generate Recalibrated bam
 #$GATK  -T PrintReads -R $REF -I ${OUT}.preMID.realigned.bam -BQSR ${OUT}.recal_data.table -o ${OUT}.preMID.bqsrCal.bam
@@ -774,6 +789,7 @@ rm *table
 ##########   summarize coverage results and reporting ########
 for f in *covd
 do
+# TODO: m*0.2 ?????
 awk '{sum+=$7}END{m=(sum/NR); b=m*0.2; print m, b}' $f \
     > $f_covd.tmp
 awk 'BEGIN{n=0}NR==FNR{m=$1;b=$2;next}{if($7>=b)n++}END{print m,(n/FNR*100.0)}' \
