@@ -2,7 +2,8 @@
 
 # This script will plot output family size histograms as produced by the
 # SWIFT UMI pipeline. It searches for files <samplename>.counts2hist and plots the
-# result for all samples in one figure.
+# result for all samples in one figure. Run this script using e.g.
+# Rscript R/plot_family_size_histogram.R
 
 library(tidyr)
 library(ggplot2) # use dev version >= 3.0.0.9000 or bear the extra Rplots.pdf
@@ -47,7 +48,7 @@ out <- ggplot(hs, aes(x = value)) +
   theme(axis.text = element_text(size = 6)) +
   ylab("Frequency") +
   xlab("MID family size") +
-  geom_histogram() +
+  geom_histogram(binwidth = 1) +
   facet_wrap(~ sample)
 
 ggsave(filename = "Figure 1: family_size_histogram.pdf", plot = out,

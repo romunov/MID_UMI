@@ -10,3 +10,13 @@
 *.bai
 *.counts2hist
 *.txt
+*.cov
+*.covd
+*.idx
+*data.table
+*.unpaired.fq
+*consensus.R*.fq
+*.pdf
+*.log
+*.intervals
+*.bed

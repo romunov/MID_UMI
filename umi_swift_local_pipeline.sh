@@ -107,15 +107,6 @@ fq2=${f%_R1*}_R2_001.fastq.gz # strips string of _R1*
 OUT=${fq1%%_L001*} # strips string of _L001*
 
 echo $(printf "##### PROCESSING SAMPLE %s" ${OUT})
-#echo $OUT
-#done
-#exit
-
-### TEMP ###
-#fq1="EGFR-27cfDNA_S53_L001_R1_001.fastq.gz"
-#fq2="EGFR-27cfDNA_S53_L001_R2_001.fastq.gz"
-#OUT="EGFR-27cfDNA_S53"
-### TEMP ###
 
 ########## PRE-MID analysis & POST-MID with fgbio ##############
 # CROP: Cut the read to a specified length by removing bases from the end - produce a MID file
@@ -152,6 +143,7 @@ ${OUT} ${OUT} ${OUT})
 time docker exec -w /reads -t picard bash --login $run_picard_addreplace_readgrp
 
 # query sort for primerclip
+#java -jar $picard SortSam I=$OUT.sam O=$OUT.qsort.sam SO=queryname
 run_sortsam1=$(printf \
     "picard-tools SortSam \
     I=%s.sam \
@@ -159,7 +151,6 @@ run_sortsam1=$(printf \
     SO=queryname" ${OUT} ${OUT})
 
 time docker exec -w /reads -t picard bash --login $run_sortsam1
-#java -jar $picard SortSam I=$OUT.sam O=$OUT.qsort.sam SO=queryname
 
 #PrimerCLIP before MID
 #/home/sandhu/.local/bin/primerclip $MASTER $OUT.qsort.sam preM${OUT}.preMID.pclip.sam
@@ -171,6 +162,7 @@ time docker exec -w /reads -t picard bash --login $run_sortsam1
 # RGPU=Miseq CREATE_INDEX=TRUE
 
 ## variant call preMID primer trimmed bam
+#lofreq call --call-indels -f $REF $OUT.preMID.bam -l $BED -o $OUT.preMID.noPclip.lf.vcf
 run_lf1=$(printf \
 "lofreq call-parallel \
     --pp-threads %s \
@@ -186,8 +178,6 @@ run_lf1=$(printf \
     ${OUT})
 
 time docker exec -w /reads -t lofreq bash --login -c "$run_lf1"
-
-#lofreq call --call-indels -f $REF $OUT.preMID.bam -l $BED -o $OUT.preMID.noPclip.lf.vcf
 
 ### MID processing ########
 # annotate bam with MIDs from the I2 file
@@ -234,16 +224,16 @@ run_sortsam2=$(printf \
 
 time docker exec -w /reads -t picard bash --login -c "$run_sortsam2"
 
-#Group Reads by UMI
+# Group Reads by UMI
 time java -jar $fgbio GroupReadsByUmi -s adjacency --edits 1 -i $OUT.sanitised.setmateinfo.qsort.bam -o $OUT.groupdbyMID.bam
 
-#Make consensus N molecules to make consensus Out is coordinate sorted
+# Make consensus N molecules to make consensus Out is coordinate sorted
 time java -jar $fgbio CallMolecularConsensusReads -M 3 -i $OUT.groupdbyMID.bam -o $OUT.M3.consensus.bam -r $OUT.M3.notused4consensus.bam
 
 # argument min reads required, so I use the "default" 1
 time java -jar $fgbio CallMolecularConsensusReads -M 1 -i $OUT.groupdbyMID.bam -o $OUT.consensus.bam -r $OUT.notused4consensus.bam
 
-#bamtofastq
+# Extract paired end reads from bam to fastq files
 #java -Xmx128g -jar $picard SamToFastq I=$OUT.M3.consensus.bam F=$OUT.consensus.R1.fq F2=$OUT.consensus.R2.fq FU=$OUT.unpaired.fq
 run_samtofq=$(printf \
 "picard-tools SamToFastq \
@@ -258,7 +248,7 @@ run_samtofq=$(printf \
 
 time docker exec -w /reads picard bash --login -c "$run_samtofq"
 
-#Realign
+# Realign
 #bwa mem $REF $OUT.consensus.R1.fq $OUT.consensus.R2.fq -t 24 -M > ${OUT}_consensus.sam
 ##bwa mem $REF $OUT.consensus.R1.fq $OUT.consensus.R2.fq -t 24 -M -I 100,50,50,500 > ${OUT}_consensus.sam
 ##bwa mem $REF $OUT.pclip.consensus.R1.fq $OUT.pclip.consensus.R2.fq -t 24 -M > ${OUT}_pclip.consensus.sam
@@ -317,8 +307,6 @@ run_picard_oddreplace_readgrp2=$(printf \
 time docker exec -w /reads -t picard bash --login -c "$run_picard_oddreplace_readgrp2"
 
 # make BED file for picard
-#cd=$PWD
-#cp /home/romunov/biotools$BED $cd/BED.bed
 samtools view -H $OUT.fgbio.bam > header.txt
 cat header.txt /home/romunov/biotools$BED > $PWD/BED.picard.bed
 pBED=BED.picard.bed
@@ -354,7 +342,7 @@ run_coltarmet2=$(printf \
     TI=%s \
     AI=%s \
     R=%s \
-    PER_TARGET_COVERAGE=%s.preMID.perTargetCov.txt" \
+    PER_TARGET_COVERAGE=%s.fgbio.perTargetCov.txt" \
     ${OUT} \
     ${OUT} \
     ${pBED} \
@@ -740,7 +728,7 @@ run_snpeff6=$(printf \
 
 time docker exec -w /reads -t snpeff bash --login -c "$run_snpeff6"
 
-#final vars from clinvar, cosmic &dbnsfp
+# Final variants from clinvar, cosmic &dbnsfp
 #java -Xmx64g -jar $anno/SnpSift.jar extractFields $OUT.fgbio.lf.cosmic.clinvar.dbnsfp.vcf \
 # CHROM POS ID REF ALT QUAL DP AF SB DP4 "CLNDN" "CLNSIG" "CLNVI" "CLNVC" "GENEINFO" "ORIGIN" "RS" "MC" "dbNSFP_LRT_pred" \
 #    "dbNSFP_Polyphen2_HDIV_pred" "dbNSFP_MutationTaster_pred" "AF_ESP" "AF_TGP" > $OUT.fgbio.lf.finalvars.txt
@@ -818,6 +806,8 @@ cat *_combined_cov_metrics.txt >> final_metrics_report.txt
 rm *_summary.txt
 rm *_covMetrics.txt
 rm *cov_metrics.txt
+rm masterparsefails.log
+rm BED.picard.bed
 
 # run quality check statistics on outputs of all samples
 ./mid_QC_module.sh

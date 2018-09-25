@@ -160,11 +160,11 @@ cat header.txt BED.bed > BED.picard.bed
 pBED=BED.picard.bed
 
 # Collect TargetedPCRMetrics from the TWO BAMs #######
-java -Xmx65g -jar $picard CollectTargetedPcrMetrics I=$OUT.preMID.bam \
+java -Xmx32g -jar $picard CollectTargetedPcrMetrics I=$OUT.preMID.bam \
     O=$OUT.preMID.targetPCRmetrics.txt TI=$pBED AI=$pBED R=$REF \
     PER_TARGET_COVERAGE=$OUT.preMID.perTargetCov.txt
 
-java -Xmx64g -jar $picard CollectTargetedPcrMetrics I=$OUT.fgbio.bam \
+java -Xmx32g -jar $picard CollectTargetedPcrMetrics I=$OUT.fgbio.bam \
     O=$OUT.fgbio.targetPCRmetrics.txt TI=$pBED AI=$pBED R=$REF \
     PER_TARGET_COVERAGE=$OUT.fgbio.perTargetCov.txt
 
