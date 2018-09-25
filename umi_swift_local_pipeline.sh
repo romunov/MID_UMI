@@ -789,24 +789,26 @@ rm *table
 ##########   summarize coverage results and reporting ########
 for f in *covd
 do
-# TODO: m*0.2 ?????
-awk '{sum+=$7}END{m=(sum/NR); b=m*0.2; print m, b}' $f \
-    > $f_covd.tmp
-awk 'BEGIN{n=0}NR==FNR{m=$1;b=$2;next}{if($7>=b)n++}END{print m,(n/FNR*100.0)}' \
- OFS="\t" $f_covd.tmp $f \
-    > ${f%.covd}_covMetrics.txt
+    # TODO: m*0.2 ?????
+    echo $(printf "Processing %s" ${f})
+    awk '{sum+=$7}END{m=(sum/NR); b=m*0.2; print m, b}' ${f} > ${f}_covd.tmp
+    awk 'BEGIN{n=0}NR==FNR{m=$1;b=$2;next}{if($7>=b)n++}END{print m,(n/FNR*100.0)}' \
+     OFS="\t" ${f}_covd.tmp ${f} > ${f%.covd}_covMetrics.txt
 done
+
+rm *covd.tmp
+
 #awk 'BEGIN{n=0}NR==FNR{m=$1;b=$2;next}{if($6>=b)n++}END{print m,b,(n/FNR*100.0)}'
 # Summarize PCR metrics
 # new PICARD rs2
+
 for f in *targetPCRmetrics.txt
 do
+    echo $(printf "Processing %s" ${f})
     awk -v n=${f%%.target*} 'NR==1{print n,$5,$11,$14*100,$22*100.0,($17+$18)/$7*100.0}' \
-        OFS="\t" <(head -n8 $f | tail -n1) \
-        > ${f%%.txt}_summary.txt
+        OFS="\t" <(head -n8 $f | tail -n1) > ${f%%.txt}_summary.txt
     f2=${f%%.target*}_covMetrics.txt
     paste ${f%%.txt}_summary.txt $f2 > ${f2%%_cov*}_combined_cov_metrics.txt
-
 done
 
 echo "SampleID    Total_Reads    #UQ_Reads_Aligned    %UQ_Reads_Aligned    %Bases_OnTarget_Aligned     %Bases_OnTarget_Total    Mean_Coverage    %Coverage_Uniformity" \
@@ -816,5 +818,6 @@ cat *_combined_cov_metrics.txt >> final_metrics_report.txt
 rm *_summary.txt
 rm *_covMetrics.txt
 rm *cov_metrics.txt
-rm *fp.vcf
-rm *mic.vcf *var.vcf
+
+# run quality check statistics on outputs of all samples
+./mid_QC_module.sh
