@@ -35,8 +35,7 @@ paste cov_table_header *pre-postCov > pre_post-MID_coverage.txt
 
 ############################################################################
 ######### MID family size distribution i.e. #duplicates per MID #############
-## Table 2: MID family size distribution (Overall Average fam size and Real family size (atleast 3 molecules per MID)
-## Figure 1: Histogram of MID Family size distribution
+## Table 2: MID family size distribution (Overall Average fam size and Real family size (at least 3 molecules per MID)
 
 for f in *groupdbyMID.bam
 do
@@ -55,17 +54,21 @@ awk '{if($1>3) print}' ${f%.group*}.mid_fam_counts.txt| awk '{sum+=$1}END{print 
 cat ${f%.group*}.avgFamSize ${f%.group*}.realFamSize > ${f%.group*}.avg_real_famSize.txt
 
 done
-rm *tmp
 
 printf "Sample\nAverage (overall) Family Size\nAverage (>2 members) Family Size\n" > fam_size_header
 paste fam_size_header *famSize.txt > MID_FamilySize_Stats_report.txt
+
+## Figure 1: Histogram of MID Family size distribution
+Rscript ./R/plot_family_size_histogram.R
+
+rm *tmp
+rm *counts2hist
 
 ###############################################################################################
 ###########   Variant binning in various AF buckets pre-postMID   #############################
 ### Classify variants into 6 Allele frequency bins from pre & post MID vcf #############
 ###  to show noise clean up due to false positive reduction when using MIDs #################
 # Table 3: False positive variant clean up with MIDs
-## Figure 2???: If we can plot this table, would make a nice graphic
 
 ## use bqsr lofreq mergeindels vcf
 for f in *.bqsr.lf.mergeIndels.vcf
@@ -107,6 +110,9 @@ done
 printf "Sample\nTotal_Vars\n<0.1%%\n0.1-0.5%%\n0.5-1%%\n1-5%%\n5-10%%\n10-50%%\n>= 50%%\n" > bin_header
 
 paste bin_header *_varbins > variant_AFbins_prePOST-MID.txt
+
+## Figure 2: Variants in allele frequencies
+Rscript ./R/plot_variant_af_bins.R --input variant_AFbins_prePOST-MID.txt
 
 #clean up
 rm *tmp
