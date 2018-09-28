@@ -58,6 +58,6 @@ out <- ggplot(xy, aes(x = vars, y = value, fill = origin)) +
   xlab("Variant allele frequencies") + ylab("Count") +
   facet_wrap(~ sample, ncol = 5)
 
-ggsave(paste("Figure 2:", paste(opt$output, opt$dev, sep = ".")), 
+ggsave(paste("Figure2", paste(opt$output, opt$dev, sep = "."), sep = "_"),
        width = opt$width, height = opt$height, device = opt$dev, units = "cm",
        title = "Variant allele frequencies")

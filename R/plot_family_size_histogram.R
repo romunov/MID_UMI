@@ -51,6 +51,6 @@ out <- ggplot(hs, aes(x = value)) +
   geom_histogram(binwidth = 1) +
   facet_wrap(~ sample)
 
-ggsave(filename = "Figure 1: family_size_histogram.pdf", plot = out,
+ggsave(filename = paste("Figure1", paste(opt$output, opt$dev, sep = "."), sep = "_"), plot = out,
        width = opt$width, height = opt$height, device = opt$dev, units = "cm",
        title = "Family size histogram")
