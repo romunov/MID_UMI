@@ -7,9 +7,7 @@ docker stop trimmomatic bwa picard snpeff gatk3.6 lofreq coveragebed
 docker rm trimmomatic bwa picard snpeff gatk3.6 lofreq coveragebed
 
 # set initial parameters
-ncores=6
-
-# TODO: vprašaj katere indel fajle se uporablja (in zakaj)
+ncores=6 # number of cores used to process data
 
 #### TOOLS ####
 # TRIMMOMATIC
@@ -777,7 +775,6 @@ rm *table
 ##########   summarize coverage results and reporting ########
 for f in *covd
 do
-    # TODO: m*0.2 ?????
     echo $(printf "Processing %s" ${f})
     awk '{sum+=$7}END{m=(sum/NR); b=m*0.2; print m, b}' ${f} > ${f}_covd.tmp
     awk 'BEGIN{n=0}NR==FNR{m=$1;b=$2;next}{if($7>=b)n++}END{print m,(n/FNR*100.0)}' \
@@ -811,3 +808,26 @@ rm BED.picard.bed
 
 # run quality check statistics on outputs of all samples
 ./mid_QC_module.sh
+
+# make result zip bundle
+report=report.zip
+
+# for individual sample
+ls *preMID.bam | xargs zip ${report}
+ls *preMID.noPclip.lf.vcf | xargs zip ${report}
+ls *M3.consensus.bam | xargs zip ${report}
+ls *fgbio.bam | xargs zip ${report}
+ls *targetPCRmetrics.txt | xargs zip ${report}
+ls *perTargetCov.txt | xargs zip ${report}
+ls *finalvars.txt | xargs zip ${report}
+ls *fgbio.bqsr.lf.vcf | xargs zip ${report}
+ls *preMID.bqsr.lf.vcf | xargs zip ${report}
+ls *fgbio.bqsr.gatkHC.vcf | xargs zip ${report}
+ls *preMID.bqsr.gatkHC.vcf | xargs zip ${report}
+
+# for all samples
+zip ${report} final_metrics_report.txt
+zip ${report} pre_post-MID_coverage.txt
+zip ${report} MID_FamilySize_Stats_report.txt
+zip ${report} variant_AFbins_prePOST-MID.txt
+ls Figure* | xargs zip ${report}
